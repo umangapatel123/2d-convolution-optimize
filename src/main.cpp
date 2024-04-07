@@ -59,7 +59,6 @@ namespace solution{
 		// }
 
 		for(std::int32_t k = 0; k < num_rows * num_cols; k++){
-				float sum[8] = {0.0};
 				int i = k / num_cols, j = k % num_cols;
 				if(j == 0 or j == num_cols - 1){
 					float sum = 0.0;
@@ -72,6 +71,8 @@ namespace solution{
 					sol_fs.write(reinterpret_cast<char*>(&sum), sizeof(sum));
 					continue;
 				}
+				int size = j + 8 > num_cols - 1 ? num_cols - j-1 : 8;
+				float sum[size] = {0.0};
 				__m256 sum_v = _mm256_setzero_ps();
 				for(std::int32_t di = -1; di <= 1; di++){
 					for(std::int32_t dj = -1; dj <= 1; dj++){
@@ -84,11 +85,8 @@ namespace solution{
 					}
 				}
 				_mm256_storeu_ps(sum, sum_v);
-				int p = 0;
-				for(p = 0; p < 8 && j + p < num_cols-1; p++){
-					sol_fs.write(reinterpret_cast<char*>(&sum[p]), sizeof(sum[p]));
-				}
-				k += p - 1;
+				sol_fs.write(reinterpret_cast<char*>(&sum), sizeof(sum));
+				k += size-1;
 		}
 		// for(std::int32_t k = 0; k < num_rows * num_cols; k++){
 		// 	float sum = 0.0;
