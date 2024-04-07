@@ -43,21 +43,9 @@ namespace solution{
 					}
 				}
 				_mm256_storeu_ps(sum, sum_v);
-				sol_fs.write(reinterpret_cast<char*>(&sum), sizeof(sum));
+				sol_fs.write(reinterpret_cast<char*>(&sum), sizeof(sum[0]) * size);
 				k += size-1;
 		}
-		// for(std::int32_t k = 0; k < num_rows * num_cols; k++){
-		// 	float sum = 0.0;
-		// 	int i = k / num_cols, j = k % num_cols;
-		// 	for(int di = -1; di <= 1; di++)
-		// 		for(int dj = -1; dj <= 1; dj++) {
-		// 			int ni = i + di, nj = j + dj;
-		// 			if(ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols) 
-		// 				sum += kernel[di+1][dj+1] * img[ni * num_cols + nj];
-		// 		}
-		// 	std::cout<< sum << std::endl;
-		// 	sol_fs.write(reinterpret_cast<char*>(&sum), sizeof(sum));
-		// }
 		sol_fs.close();
 		return sol_path;
 	}
