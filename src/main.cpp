@@ -17,8 +17,6 @@ namespace solution
 	std::string compute(const std::string &bitmap_path, const float kernel[3][3], const std::int32_t num_rows, const std::int32_t num_cols)
 	{
 		std::string sol_path = std::filesystem::temp_directory_path() / "student_sol.bmp";
-		// std::ofstream sol_fs(sol_path, std::ios::binary);
-		// std::ifstream bitmap_fs(bitmap_path, std::ios::binary);
 		int bitmap_fd = open(bitmap_path.c_str(), O_RDONLY);
 		int sol_fd = open(sol_path.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 		if (bitmap_fd == -1 or sol_fd == -1)
@@ -62,6 +60,7 @@ namespace solution
 			if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
 			{
 				float sum = 0.0;
+				#pragma omp parallel for
 				for (int di = -1; di <= 1; di++)
 					for (int dj = -1; dj <= 1; dj++)
 					{
