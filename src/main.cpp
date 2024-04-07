@@ -18,7 +18,7 @@ namespace solution{
 		bitmap_fs.close();
 		for(std::int32_t k = 0; k < num_rows * num_cols; k++){
 				int i = k / num_cols, j = k % num_cols;
-				if(j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1){
+				if(j == 0 or j == num_cols - 1){
 					float sum = 0.0;
 					for(std::int32_t di = -1; di <= 1; di++)
 						for(std::int32_t dj = -1; dj <= 1; dj++) {
@@ -30,7 +30,7 @@ namespace solution{
 					continue;
 				}
 				int size = j + 8 > num_cols - 1 ? num_cols - j-1 : 8;
-				float sum[size] = {0.0};
+				float sum[size];
 				__m256 sum_v = _mm256_setzero_ps();
 				for(std::int32_t di = -1; di <= 1; di++){
 					for(std::int32_t dj = -1; dj <= 1; dj++){
