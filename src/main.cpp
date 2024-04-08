@@ -53,14 +53,13 @@ namespace solution
 			close(sol_fd);
 			exit(EXIT_FAILURE);
 		}
-
+		#pragma omp taskloop num_tasks(4) untied
 		for (std::int32_t k = 0; k < num_rows * num_cols; k++)
 		{
 			int i = k / num_cols, j = k % num_cols;
 			if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
 			{
 				float sum = 0.0;
-				#pragma omp parallel for
 				for (int di = -1; di <= 1; di++)
 					for (int dj = -1; dj <= 1; dj++)
 					{
@@ -87,7 +86,6 @@ namespace solution
 			_mm256_storeu_ps(solution + k, sum);
 			k += size - 1;
 		}
-
 		munmap(img, sizeof(float) * num_rows * num_cols);
 		munmap(solution, sizeof(float) * num_rows * num_cols);
 		close(bitmap_fd);
