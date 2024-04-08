@@ -53,39 +53,89 @@ namespace solution
 			close(sol_fd);
 			exit(EXIT_FAILURE);
 		}
-		#pragma omp taskloop num_tasks(4) untied
-		for (std::int32_t k = 0; k < num_rows * num_cols; k++)
-		{
-			int i = k / num_cols, j = k % num_cols;
-			if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
-			{
-				float sum = 0.0;
-				for (int di = -1; di <= 1; di++)
-					for (int dj = -1; dj <= 1; dj++)
-					{
-						int ni = i + di, nj = j + dj;
-						if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-							sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
-					}
-				solution[k] = sum;
-				continue;
-			}
 
-			int size = j + 8 > num_cols - 1 ? num_cols - j - 1 : 8;
-			__m256 sum = _mm256_setzero_ps();
-			for (int di = -1; di <= 1; di++)
+#pragma omp parallel
+		{
+#pragma omp single
 			{
-				for (int dj = -1; dj <= 1; dj++)
+				int num_threads = omp_get_num_threads();
+				int chunk_size = (num_rows * num_cols) / num_threads;
+				int remainder = (num_rows * num_cols) % num_threads;
+				int start = 0;
+				for (int i = 0; i < num_threads; i++)
 				{
-					int ni = i + di, nj = j + dj;
-					__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-					__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
-					sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
+					int end = start + chunk_size + (i == num_threads - 1 ? remainder : 0);
+					#pragma omp tied task firstprivate(start, end)
+					{
+						for (int k = start; k < end; k++)
+						{
+							int i = k / num_cols, j = k % num_cols;
+							if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
+							{
+								float sum = 0.0;
+								for (int di = -1; di <= 1; di++)
+									for (int dj = -1; dj <= 1; dj++)
+									{
+										int ni = i + di, nj = j + dj;
+										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
+											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
+									}
+								solution[k] = sum;
+								continue;
+							}
+
+							int size = j + 8 > num_cols - 1 ? num_cols - j - 1 : 8;
+							__m256 sum = _mm256_setzero_ps();
+							for (int di = -1; di <= 1; di++)
+							{
+								for (int dj = -1; dj <= 1; dj++)
+								{
+									int ni = i + di, nj = j + dj;
+									__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
+									__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+									sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
+								}
+							}
+							_mm256_storeu_ps(solution + k, sum);
+							k += size - 1;
+						}
+					}
+					start = end;
 				}
 			}
-			_mm256_storeu_ps(solution + k, sum);
-			k += size - 1;
 		}
+		// for (std::int32_t k = 0; k < num_rows * num_cols; k++)
+		// {
+		// 	int i = k / num_cols, j = k % num_cols;
+		// 	if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
+		// 	{
+		// 		float sum = 0.0;
+		// 		for (int di = -1; di <= 1; di++)
+		// 			for (int dj = -1; dj <= 1; dj++)
+		// 			{
+		// 				int ni = i + di, nj = j + dj;
+		// 				if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
+		// 					sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
+		// 			}
+		// 		solution[k] = sum;
+		// 		continue;
+		// 	}
+
+		// 	int size = j + 8 > num_cols - 1 ? num_cols - j - 1 : 8;
+		// 	__m256 sum = _mm256_setzero_ps();
+		// 	for (int di = -1; di <= 1; di++)
+		// 	{
+		// 		for (int dj = -1; dj <= 1; dj++)
+		// 		{
+		// 			int ni = i + di, nj = j + dj;
+		// 			__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
+		// 			__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+		// 			sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
+		// 		}
+		// 	}
+		// 	_mm256_storeu_ps(solution + k, sum);
+		// 	k += size - 1;
+		// }
 		munmap(img, sizeof(float) * num_rows * num_cols);
 		munmap(solution, sizeof(float) * num_rows * num_cols);
 		close(bitmap_fd);
