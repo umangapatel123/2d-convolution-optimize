@@ -68,7 +68,7 @@ namespace solution
 				for (int i = 0; i < num_threads; i++)
 				{
 					int end = start + chunk_size + (i == num_threads - 1 ? remainder : 0);
-#pragma omp task firstprivate(start, end)
+					#pragma omp tied task firstprivate(start, end)
 					{
 						for (int k = start; k < end; k++)
 						{
@@ -86,36 +86,21 @@ namespace solution
 								solution[k] = sum;
 								continue;
 							}
-							if (j + 8 > num_cols - 1)
+
+							int size = j + 8 > num_cols - 1 ? num_cols - j - 1 : 8;
+							__m256 sum = _mm256_setzero_ps();
+							for (int di = -1; di <= 1; di++)
 							{
-								float sum = 0.0;
-								for (int di = -1; di <= 1; di++)
+								for (int dj = -1; dj <= 1; dj++)
 								{
-									for (int dj = -1; dj <= 1; dj++)
-									{
-										int ni = i + di, nj = j + dj;
-										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
-									}
+									int ni = i + di, nj = j + dj;
+									__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
+									__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+									sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
 								}
-								solution[k] = sum;
 							}
-							else
-							{
-								__m256 sum = _mm256_setzero_ps();
-								for (int di = -1; di <= 1; di++)
-								{
-									for (int dj = -1; dj <= 1; dj++)
-									{
-										int ni = i + di, nj = j + dj;
-										__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-										__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
-										sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
-									}
-								}
-								_mm256_storeu_ps(solution + k, sum);
-								k += 7;
-							}
+							_mm256_storeu_ps(solution + k, sum);
+							k += size - 1;
 						}
 					}
 					start = end;
