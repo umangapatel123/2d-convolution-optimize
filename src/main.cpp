@@ -71,8 +71,8 @@ namespace solution
 						{
 							int i = k / num_cols, j = k % num_cols;
 
-							// _mm_prefetch(reinterpret_cast<const char *>(img + (i + 1) * num_cols + j), _MM_HINT_T0);
-							_mm_prefetch(img + (i + 1) * num_cols + j, _MM_HINT_T0);
+							__builtin_prefetch(img + (i + 1) * num_cols + j, 0, 0);
+
 							if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
 							{
 								float sum = 0.0;
@@ -115,9 +115,6 @@ namespace solution
 								}
 								_mm256_storeu_ps(solution + k, sum);
 								k += 7;
-
-								// _mm_prefetch(reinterpret_cast<const char *>(solution + k+1), _MM_HINT_T0);
-								_mm_prefetch(solution + k + 1, _MM_HINT_T0);
 							}
 						}
 					}
