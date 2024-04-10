@@ -54,6 +54,11 @@ namespace solution
 			exit(EXIT_FAILURE);
 		}
 
+		__m256 kernel_vec[9];
+		for (int i = 0; i < 3; i++)
+			for (int j = 0; j < 3; j++)
+				kernel_vec[i * 3 + j] = _mm256_set1_ps(kernel[i][j]);
+
 #pragma omp parallel
 		{
 #pragma omp single
@@ -71,7 +76,7 @@ namespace solution
 						{
 							int i = k / num_cols, j = k % num_cols;
 
-							__builtin_prefetch(img + (i + 1) * num_cols + j, 0, 0);
+							// __builtin_prefetch(img + (i + 1) * num_cols + j);
 
 							if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
 							{
@@ -109,8 +114,11 @@ namespace solution
 									{
 										int ni = i + di, nj = j + dj;
 										__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-										__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+										__m256 kernel_v = kernel_vec[(di + 1) * 3 + dj + 1];
 										sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
+										// __m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
+										// __m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+										// sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
 									}
 								}
 								_mm256_storeu_ps(solution + k, sum);
