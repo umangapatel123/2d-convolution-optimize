@@ -1,5 +1,5 @@
 #pragma GCC optimize("O3,unroll-loops")
-#pragma GCC target("avx2,bmi,bmi2,lzcnt,popcnt")
+#pragma GCC target("avx2,bmi,bmi2,lzcnt,popcnt,avx512f,avx512dq,avx512cd,avx512bw,avx512vl")
 #include <iostream>
 #include <fstream>
 #include <memory>
@@ -14,157 +14,93 @@
 
 namespace solution
 {
-	std::string compute(const std::string &bitmap_path, const float kernel[3][3], const std::int32_t num_rows, const std::int32_t num_cols)
-	{
-		std::string sol_path = std::filesystem::temp_directory_path() / "student_sol.bmp";
-		int bitmap_fd = open(bitmap_path.c_str(), O_RDONLY);
-		int sol_fd = open(sol_path.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-		if (bitmap_fd == -1 or sol_fd == -1)
-		{
-			std::cerr << "Error opening file" << std::endl;
-			close(bitmap_fd);
-			close(sol_fd);
-			exit(EXIT_FAILURE);
-		}
-		float *img = reinterpret_cast<float *>(mmap(nullptr, sizeof(float) * num_rows * num_cols, PROT_READ, MAP_PRIVATE, bitmap_fd, 0));
-		if (img == MAP_FAILED)
-		{
-			std::cerr << "Error mapping file" << std::endl;
-			close(bitmap_fd);
-			close(sol_fd);
-			exit(EXIT_FAILURE);
-		}
-		if (ftruncate(sol_fd, sizeof(float) * num_rows * num_cols) == -1)
-		{
-			std::cerr << "Error truncating file" << std::endl;
-			munmap(img, sizeof(float) * num_rows * num_cols);
-			close(bitmap_fd);
-			close(sol_fd);
-			exit(EXIT_FAILURE);
-		}
+    std::string compute(const std::string &bitmap_path, const float kernel[3][3], const std::int32_t num_rows, const std::int32_t num_cols)
+    {
+        std::string sol_path = std::filesystem::temp_directory_path() / "student_sol.bmp";
+        int bitmap_fd = open(bitmap_path.c_str(), O_RDONLY);
+        int sol_fd = open(sol_path.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+        if (bitmap_fd == -1 or sol_fd == -1)
+        {
+            std::cerr << "Error opening file" << std::endl;
+            close(bitmap_fd);
+            close(sol_fd);
+            exit(EXIT_FAILURE);
+        }
+        float *img = reinterpret_cast<float *>(mmap(nullptr, sizeof(float) * num_rows * num_cols, PROT_READ, MAP_PRIVATE, bitmap_fd, 0));
+        if (img == MAP_FAILED)
+        {
+            std::cerr << "Error mapping file" << std::endl;
+            close(bitmap_fd);
+            close(sol_fd);
+            exit(EXIT_FAILURE);
+        }
+        if (ftruncate(sol_fd, sizeof(float) * num_rows * num_cols) == -1)
+        {
+            std::cerr << "Error truncating file" << std::endl;
+            munmap(img, sizeof(float) * num_rows * num_cols);
+            close(bitmap_fd);
+            close(sol_fd);
+            exit(EXIT_FAILURE);
+        }
 
-		float *solution = reinterpret_cast<float *>(mmap(nullptr, sizeof(float) * num_rows * num_cols, PROT_READ | PROT_WRITE, MAP_SHARED, sol_fd, 0));
+        float *solution = reinterpret_cast<float *>(mmap(nullptr, sizeof(float) * num_rows * num_cols, PROT_READ | PROT_WRITE, MAP_SHARED, sol_fd, 0));
 
-		if (solution == MAP_FAILED)
-		{
-			std::cerr << "Error mapping file" << std::endl;
-			munmap(img, sizeof(float) * num_rows * num_cols);
-			close(bitmap_fd);
-			close(sol_fd);
-			exit(EXIT_FAILURE);
-		}
+        if (solution == MAP_FAILED)
+        {
+            std::cerr << "Error mapping file" << std::endl;
+            munmap(img, sizeof(float) * num_rows * num_cols);
+            close(bitmap_fd);
+            close(sol_fd);
+            exit(EXIT_FAILURE);
+        }
 
-		// setenv("OMP_PROC_BIND", "close", 1);
-		// setenv("OMP_PLACES", "{0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46}", 1);
+        // system("export -E OMP_PROC_BIND=close");
+        // system("export OMP_PLACES='{0},{2},{4},{6},{8},{10},{12},{14},{16},{18},{20},{22},{24},{26},{28},{30},{32},{34},{36},{38},{40},{42},{44},{46},{0},{4},{8},{12},{16},{20},{24},{28},{32},{36},{40},{44},{48},{52},{56},{60}'");
 
 #pragma omp parallel
-		{
+        {
 #pragma omp single
-			{
-				int num_threads = omp_get_num_threads();
-				int chunk_size = (num_rows * num_cols) / num_threads;
-				int remainder = (num_rows * num_cols) % num_threads;
-				int start = 0;
-				for (int i = 0; i < num_threads; i++)
-				{
-					int end = start + chunk_size + (i == num_threads - 1 ? remainder : 0);
+            {
+                int num_threads = omp_get_num_threads();
+                int chunk_size = (num_rows * num_cols) / (num_threads * 16);
+                int remainder = (num_rows * num_cols) % (num_threads * 16);
+                int start = 0;
+                for (int i = 0; i < num_threads; i++)
+                {
+                    int end = start + chunk_size + (i == num_threads - 1 ? remainder : 0);
 #pragma omp task firstprivate(start, end)
-					{
-						for (int k = start; k < end; k++)
-						{
-							int i = k / num_cols, j = k % num_cols;
+                    {
+                        for (int k = start; k < end; k += 16)
+                        {
+                            int i = k / num_cols, j = k % num_cols;
 
-							// __builtin_prefetch(img + (i + 1) * num_cols + j);
+                            __m512 sum = _mm512_setzero_ps();
+                            for (int di = -1; di <= 1; di++)
+                            {
+                                for (int dj = -1; dj <= 1; dj++)
+                                {
+                                    int ni = i + di, nj = j + dj;
+                                    if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
+                                    {
+                                        __m512 img_v = _mm512_loadu_ps(img + ni * num_cols + nj);
+                                        __m512 kernel_v = _mm512_set1_ps(kernel[di + 1][dj + 1]);
+                                        sum = _mm512_fmadd_ps(kernel_v, img_v, sum);
+                                    }
+                                }
+                            }
+                            _mm512_storeu_ps(solution + k, sum);
+                        }
+                    }
+                    start = end;
+                }
+            }
+        }
 
-							if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
-							{
-								float sum = 0.0;
-								for (int di = -1; di <= 1; di++)
-									for (int dj = -1; dj <= 1; dj++)
-									{
-										int ni = i + di, nj = j + dj;
-										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
-									}
-								solution[k] = sum;
-								continue;
-							}
-							if (j + 8 > num_cols - 1)
-							{
-								float sum = 0.0;
-								for (int di = -1; di <= 1; di++)
-								{
-									for (int dj = -1; dj <= 1; dj++)
-									{
-										int ni = i + di, nj = j + dj;
-										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
-									}
-								}
-								solution[k] = sum;
-							}
-							else
-							{
-								__m256 sum = _mm256_setzero_ps();
-								for (int di = -1; di <= 1; di++)
-								{
-									for (int dj = -1; dj <= 1; dj++)
-									{
-										int ni = i + di, nj = j + dj;
-										__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-										__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
-										sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
-										// __m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-										// __m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
-										// sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
-									}
-								}
-								_mm256_storeu_ps(solution + k, sum);
-								k += 7;
-							}
-						}
-					}
-					start = end;
-				}
-			}
-		}
-		// for (std::int32_t k = 0; k < num_rows * num_cols; k++)
-		// {
-		// 	int i = k / num_cols, j = k % num_cols;
-		// 	if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
-		// 	{
-		// 		float sum = 0.0;
-		// 		for (int di = -1; di <= 1; di++)
-		// 			for (int dj = -1; dj <= 1; dj++)
-		// 			{
-		// 				int ni = i + di, nj = j + dj;
-		// 				if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-		// 					sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
-		// 			}
-		// 		solution[k] = sum;
-		// 		continue;
-		// 	}
+        munmap(img, sizeof(float) * num_rows * num_cols);
+        munmap(solution, sizeof(float) * num_rows * num_cols);
+        close(bitmap_fd);
+        close(sol_fd);
 
-		// 	int size = j + 8 > num_cols - 1 ? num_cols - j - 1 : 8;
-		// 	__m256 sum = _mm256_setzero_ps();
-		// 	for (int di = -1; di <= 1; di++)
-		// 	{
-		// 		for (int dj = -1; dj <= 1; dj++)
-		// 		{
-		// 			int ni = i + di, nj = j + dj;
-		// 			__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-		// 			__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
-		// 			sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
-		// 		}
-		// 	}
-		// 	_mm256_storeu_ps(solution + k, sum);
-		// 	k += size - 1;
-		// }
-		munmap(img, sizeof(float) * num_rows * num_cols);
-		munmap(solution, sizeof(float) * num_rows * num_cols);
-		close(bitmap_fd);
-		close(sol_fd);
-
-		return sol_path;
-	};
+        return sol_path;
+    };
 }
