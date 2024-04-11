@@ -56,10 +56,9 @@ namespace solution
 			exit(EXIT_FAILURE);
 		}
 
-		omp_set_num_threads(omp_get_num_threads()/2);
-		omp_set_schedule(omp_sched_static, 1);
-
-#pragma omp parallel
+		char *gomp = (char *)"GOMP_CPU_AFFINITY= 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 32 34 36 38 40 42 44 46";
+		putenv(gomp);
+#pragma omp parallel num_threads(24)
 		{
 
 #pragma omp single
