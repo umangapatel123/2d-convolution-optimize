@@ -113,7 +113,7 @@ namespace solution
 									}
 								}
 								_mm512_storeu_ps(solution + k, sum);
-								k += 7;
+								k += 15;
 							}
 						}
 					}
