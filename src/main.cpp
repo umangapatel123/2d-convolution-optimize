@@ -54,16 +54,13 @@ namespace solution
 			exit(EXIT_FAILURE);
 		}
 
-		// system("export -E OMP_PROC_BIND=close");
-		// system("export OMP_PLACES='{0},{2},{4},{6},{8},{10},{12},{14},{16},{18},{20},{22},{24},{26},{28},{30},{32},{34},{36},{38},{40},{42},{44},{46},{0},{4},{8},{12},{16},{20},{24},{28},{32},{36},{40},{44},{48},{52},{56},{60}'");
-
 #pragma omp parallel
 		{
 #pragma omp single
 			{
 				int num_threads = omp_get_num_threads();
-				int chunk_size = (num_rows * num_cols) / (num_threads * 16);
-				int remainder = (num_rows * num_cols) % (num_threads * 16);
+				int chunk_size = (num_rows * num_cols) / num_threads;
+				int remainder = (num_rows * num_cols) % num_threads;
 				int start = 0;
 				for (int i = 0; i < num_threads; i++)
 				{
@@ -88,6 +85,7 @@ namespace solution
 									}
 								}
 								solution[k] = sum;
+								continue;
 							}
 							if (j + 16 > num_cols - 1)
 							{
@@ -127,11 +125,6 @@ namespace solution
 				}
 			}
 		}
-
-		munmap(img, sizeof(float) * num_rows * num_cols);
-		munmap(solution, sizeof(float) * num_rows * num_cols);
-		close(bitmap_fd);
-		close(sol_fd);
 
 		return sol_path;
 	};
