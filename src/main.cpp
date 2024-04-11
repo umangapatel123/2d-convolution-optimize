@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
 
 namespace solution
 {
@@ -54,8 +56,12 @@ namespace solution
 			exit(EXIT_FAILURE);
 		}
 
+		omp_set_num_threads(omp_get_num_threads()/2);
+		omp_set_schedule(omp_sched_static, 1);
+
 #pragma omp parallel
 		{
+
 #pragma omp single
 			{
 				int num_threads = omp_get_num_threads();
@@ -85,7 +91,7 @@ namespace solution
 								solution[k] = sum;
 								continue;
 							}
-							if (j + 16 > num_cols - 1)
+							if (j + 8 > num_cols - 1)
 							{
 								float sum = 0.0;
 								for (int di = -1; di <= 1; di++)
@@ -101,19 +107,19 @@ namespace solution
 							}
 							else
 							{
-								__m512 sum = _mm512_setzero_ps();
+								__m256 sum = _mm256_setzero_ps();
 								for (int di = -1; di <= 1; di++)
 								{
 									for (int dj = -1; dj <= 1; dj++)
 									{
 										int ni = i + di, nj = j + dj;
-										__m512 img_v = _mm512_loadu_ps(img + ni * num_cols + nj);
-										__m512 kernel_v = _mm512_set1_ps(kernel[di + 1][dj + 1]);
-										sum = _mm512_fmadd_ps(kernel_v, img_v, sum);
+										__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
+										__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
+										sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
 									}
 								}
-								_mm512_storeu_ps(solution + k, sum);
-								k += 15;
+								_mm256_storeu_ps(solution + k, sum);
+								k += 7;
 							}
 						}
 					}
