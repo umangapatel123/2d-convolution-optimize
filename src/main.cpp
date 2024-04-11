@@ -70,20 +70,18 @@ namespace solution
 						for (int k = start; k < end; k++)
 						{
 							int i = k / num_cols, j = k % num_cols;
-							if (i == 0 or i == num_rows - 1 or j == 0 or j == num_cols - 1)
+
+							_mm_prefetch(img + (i + 1) * num_cols + j, _MM_HINT_T0);
+							if (j == 0 or j == num_cols - 1 or i == 0 or i == num_rows - 1)
 							{
 								float sum = 0.0;
 								for (int di = -1; di <= 1; di++)
-								{
 									for (int dj = -1; dj <= 1; dj++)
 									{
 										int ni = i + di, nj = j + dj;
 										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-										{
-											sum += img[ni * num_cols + nj] * kernel[di + 1][dj + 1];
-										}
+											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
 									}
-								}
 								solution[k] = sum;
 								continue;
 							}
@@ -96,9 +94,7 @@ namespace solution
 									{
 										int ni = i + di, nj = j + dj;
 										if (ni >= 0 and ni < num_rows and nj >= 0 and nj < num_cols)
-										{
-											sum += img[ni * num_cols + nj] * kernel[di + 1][dj + 1];
-										}
+											sum += kernel[di + 1][dj + 1] * img[ni * num_cols + nj];
 									}
 								}
 								solution[k] = sum;
@@ -111,13 +107,13 @@ namespace solution
 									for (int dj = -1; dj <= 1; dj++)
 									{
 										int ni = i + di, nj = j + dj;
-										__m512 img_val = _mm512_set1_ps(img[ni * num_cols + nj]);
-										__m512 kernel_val = _mm512_set1_ps(kernel[di + 1][dj + 1]);
-										sum = _mm512_fmadd_ps(img_val, kernel_val, sum);
+										__m512 img_v = _mm512_loadu_ps(img + ni * num_cols + nj);
+										__m512 kernel_v = _mm512_set1_ps(kernel[di + 1][dj + 1]);
+										sum = _mm512_fmadd_ps(kernel_v, img_v, sum);
 									}
 								}
 								_mm512_storeu_ps(solution + k, sum);
-								k += 15;
+								k += 7;
 							}
 						}
 					}
@@ -125,6 +121,10 @@ namespace solution
 				}
 			}
 		}
+		// munmap(img, sizeof(float) * num_rows * num_cols);
+		// munmap(solution, sizeof(float) * num_rows * num_cols);
+		// close(bitmap_fd);
+		// close(sol_fd);
 
 		return sol_path;
 	};
