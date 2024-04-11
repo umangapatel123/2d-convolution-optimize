@@ -54,12 +54,10 @@ namespace solution
 			exit(EXIT_FAILURE);
 		}
 
-		__m256 kernel_vec[9];
-		for (int i = 0; i < 3; i++)
-			for (int j = 0; j < 3; j++)
-				kernel_vec[i * 3 + j] = _mm256_set1_ps(kernel[i][j]);
+		setenv("OMP_PROC_BIND", "close", 1);
+		setenv("OMP_PLACES", "{0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46}", 1);
 
-#pragma omp parallel
+#pragma omp parallel num_threads(24)
 		{
 #pragma omp single
 			{
@@ -114,7 +112,7 @@ namespace solution
 									{
 										int ni = i + di, nj = j + dj;
 										__m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
-										__m256 kernel_v = kernel_vec[(di + 1) * 3 + dj + 1];
+										__m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
 										sum = _mm256_fmadd_ps(kernel_v, img_v, sum);
 										// __m256 img_v = _mm256_loadu_ps(img + ni * num_cols + nj);
 										// __m256 kernel_v = _mm256_set1_ps(kernel[di + 1][dj + 1]);
